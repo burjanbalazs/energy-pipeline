@@ -10,4 +10,4 @@
 #     -var-file="secrets.tfvars"
 # ============================================================
 
-subscription_id = "your-azure-subscription-id-here"
+subscription_id = "661e6042-3f07-403c-8035-39b8cd740872"
