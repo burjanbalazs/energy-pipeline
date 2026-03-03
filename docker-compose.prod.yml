@@ -1,0 +1,59 @@
+# ============================================================
+# docker-compose.prod.yml
+# Production overrides. Used on top of docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Key differences from dev:
+#   - No ports exposed publicly (postgres, kafka, airflow)
+#   - Superset + Airflow behind nginx (ports 80/443 only)
+#   - Restart policies enforced
+#   - No Kafka UI in prod (unnecessary attack surface)
+# ============================================================
+
+version: "3.8"
+
+services:
+
+  # Postgres — remove public port entirely in prod
+  postgres:
+    ports: []     # overrides and removes the 5432:5432 mapping
+
+  # Kafka — remove host-accessible port in prod
+  # inter-container traffic on kafka:9092 still works fine
+  kafka:
+    ports: []
+    environment:
+      # In prod, only the internal listener is needed
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+
+  # Kafka UI — disabled entirely in prod
+  kafka-ui:
+    profiles:
+      - dev-only           # won't start unless you explicitly pass --profile dev-only
+
+  # Airflow webserver — no direct port exposure, nginx handles it
+  airflow-webserver:
+    ports: []
+
+  # Superset — no direct port exposure, nginx handles it
+  superset:
+    ports: []
+
+  # Nginx — reverse proxy sitting in front of Airflow and Superset
+  # Only service with public ports (80 + 443)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro    # TLS certs (e.g. from certbot)
+    networks:
+      - pipeline_net
+    depends_on:
+      - airflow-webserver
+      - superset
+    restart: unless-stopped

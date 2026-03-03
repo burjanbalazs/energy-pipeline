@@ -1,0 +1,307 @@
+version: "3.8"
+
+# ============================================================
+# ENERGY PIPELINE - Local Dev Stack
+# Services: Zookeeper, Kafka, Kafka-UI, Postgres, Airflow
+#           (webserver + scheduler + init), Superset
+# ============================================================
+
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    # Azure Blob Storage credentials injected into all Airflow containers
+    AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME}
+    AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY}
+    # ENTSO-E API key
+    ENTSOE_API_KEY: ${ENTSOE_API_KEY}
+  volumes:
+    - ./orchestration/dags:/opt/airflow/dags
+    - ./orchestration/plugins:/opt/airflow/plugins
+    - ./processing:/opt/airflow/processing       # PySpark jobs accessible from Airflow
+    - ./transform:/opt/airflow/transform         # dbt project accessible from Airflow
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - pipeline_net
+  restart: unless-stopped
+
+services:
+
+  # ─────────────────────────────────────────
+  # ZOOKEEPER — Kafka coordination
+  # ─────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - pipeline_net
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # KAFKA — Message broker
+  # ─────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # PLAINTEXT_HOST allows connections from your local machine (localhost:29092)
+      # PLAINTEXT is for inter-container communication (kafka:9092)
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # we create topics explicitly
+      KAFKA_LOG_RETENTION_HOURS: 168             # keep messages for 7 days
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    ports:
+      - "29092:29092"   # exposed to host for local producers/debugging
+    networks:
+      - pipeline_net
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # KAFKA INIT — Creates topics on startup
+  # Runs once and exits. See comments below
+  # for full explanation of how this works.
+  # ─────────────────────────────────────────
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - pipeline_net
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        echo "Waiting for Kafka to be ready..."
+        cub kafka-ready -b kafka:9092 1 30
+
+        echo "Creating topics..."
+
+        kafka-topics --bootstrap-server kafka:9092 \
+          --create --if-not-exists \
+          --topic raw.weather.hourly \
+          --partitions 3 \
+          --replication-factor 1 \
+          --config retention.ms=604800000
+
+        kafka-topics --bootstrap-server kafka:9092 \
+          --create --if-not-exists \
+          --topic raw.energy.demand \
+          --partitions 3 \
+          --replication-factor 1 \
+          --config retention.ms=604800000
+
+        kafka-topics --bootstrap-server kafka:9092 \
+          --create --if-not-exists \
+          --topic dead.letter.queue \
+          --partitions 1 \
+          --replication-factor 1 \
+          --config retention.ms=2592000000
+
+        echo "Topics created. Listing all topics:"
+        kafka-topics --bootstrap-server kafka:9092 --list
+    restart: "no"   # run once and exit — this is intentional
+
+  # ─────────────────────────────────────────
+  # KAFKA UI — Web UI to inspect topics,
+  # messages, consumer groups (localhost:8090)
+  # ─────────────────────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8090:8080"
+    networks:
+      - pipeline_net
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # POSTGRES — Airflow metadata DB
+  # Also usable as a general scratch DB
+  # ─────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql  # optional extra DBs
+    ports:
+      - "5432:5432"
+    networks:
+      - pipeline_net
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────
+  # AIRFLOW INIT — DB migrations + admin user
+  # Runs once and exits.
+  # ─────────────────────────────────────────
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@pipeline.local
+        echo "Airflow initialized."
+    restart: "no"
+
+  # ─────────────────────────────────────────
+  # AIRFLOW WEBSERVER — UI on localhost:8080
+  # ─────────────────────────────────────────
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ─────────────────────────────────────────
+  # AIRFLOW SCHEDULER — Runs DAGs
+  # ─────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ─────────────────────────────────────────
+  # SUPERSET — Dashboard UI on localhost:8088
+  # ─────────────────────────────────────────
+  superset:
+    image: apache/superset:3.1.0
+    container_name: superset
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://airflow:airflow@postgres:5432/superset
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset_home:/app/superset_home
+      - ./viz/superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - pipeline_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      superset-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+# ─────────────────────────────────────────
+# Superset initialization — creates admin user and runs DB migrations
+# Runs once and exits.
+# ─────────────────────────────────────────
+  superset-init:
+    image: apache/superset:3.1.0
+    container_name: superset-init
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://airflow:airflow@postgres:5432/superset
+    volumes:
+      - ./viz/superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - pipeline_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "superset db upgrade &&
+              superset fab create-admin
+                --username admin
+                --firstname Admin
+                --lastname Admin
+                --email admin@pipeline.local
+                --password admin &&
+              superset init"
+    restart: "no"
+
+# ─────────────────────────────────────────
+# NAMED VOLUMES
+# ─────────────────────────────────────────
+volumes:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  postgres_data:
+  airflow_logs:
+  superset_home:
+
+# ─────────────────────────────────────────
+# NETWORK — all containers talk to each other
+# via service name (e.g. kafka:9092)
+# ─────────────────────────────────────────
+networks:
+  pipeline_net:
+    driver: bridge
