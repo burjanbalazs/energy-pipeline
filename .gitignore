@@ -1,0 +1,48 @@
+# ============================================================
+# .gitignore
+# ============================================================
+
+# ── Secrets & environment ────────────────────────────────────
+.env
+*.tfvars
+!*.tfvars.example        # allow example tfvars if you add them
+secrets.tfvars
+
+# ── Terraform ────────────────────────────────────────────────
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.backup
+**/*.tfstate.lock.info
+**/crash.log
+
+# ── dbt ──────────────────────────────────────────────────────
+transform/target/
+transform/dbt_packages/
+transform/logs/
+transform/profiles.yml   # contains warehouse credentials
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Spark ────────────────────────────────────────────────────
+derby.log
+metastore_db/
+spark-warehouse/
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
