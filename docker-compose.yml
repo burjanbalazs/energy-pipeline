@@ -236,6 +236,29 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+
+# ─────────────────────────────────────────
+# Superset initialization — creates admin user and runs DB migrations
+# Runs once and exits.
+# ─────────────────────────────────────────
+  superset-init:
+    image: apache/superset:3.1.0
+    container_name: superset-init
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://airflow:airflow@postgres:5432/superset
+    volumes:
+      - ./viz/superset_config.py:/app/pythonpath/superset_config.py
+    networks:
+      - pipeline_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      bash -c "superset db upgrade &&
+             superset fab create-admin --username admin --firstname Admin --lastname Admin --email admin@pipeline.local --password admin &&
+             superset init"
+    restart: "no"
   # ─────────────────────────────────────────
   # SUPERSET — Dashboard UI on localhost:8088
   # ─────────────────────────────────────────
@@ -258,34 +281,6 @@ services:
       superset-init:
         condition: service_completed_successfully
     restart: unless-stopped
-
-# ─────────────────────────────────────────
-# Superset initialization — creates admin user and runs DB migrations
-# Runs once and exits.
-# ─────────────────────────────────────────
-  superset-init:
-    image: apache/superset:3.1.0
-    container_name: superset-init
-    environment:
-      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
-      SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://airflow:airflow@postgres:5432/superset
-    volumes:
-      - ./viz/superset_config.py:/app/pythonpath/superset_config.py
-    networks:
-      - pipeline_net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: >
-      bash -c "superset db upgrade &&
-              superset fab create-admin
-                --username admin
-                --firstname Admin
-                --lastname Admin
-                --email admin@pipeline.local
-                --password admin &&
-              superset init"
-    restart: "no"
 
 # ─────────────────────────────────────────
 # NAMED VOLUMES
