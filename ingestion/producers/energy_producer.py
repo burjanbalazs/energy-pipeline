@@ -22,8 +22,6 @@ from datetime import datetime, timezone, timedelta, date
 import requests
 from confluent_kafka import Producer
 
-from ingestion.schemas.energy_schema import EnergyMessage
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
