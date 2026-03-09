@@ -27,6 +27,16 @@ logging.basicConfig(
 )
 log = logging.getLogger("weather_producer")
 
+def get_weather_data(latitude: float, longitude: float, date_end: str):
+    query_params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": date_end,
+        "end_date": date_end,
+        "hourly": config.OPENMETEO_VARIABLES
+    }
+    return requests.get(config.OPENMETEO_URL, params=query_params).json()
+
 def query_city_information(list_of_cities: None) -> list:
     cities_information = []
     for city in config.CITIES_LIST:
@@ -40,34 +50,30 @@ def query_city_information(list_of_cities: None) -> list:
         cities_information.append((city_json["results"][0]["country_code"], city_json["results"][0]["name"], city_json["results"][0]["latitude"], city_json["results"][0]["longitude"]))
     return cities_information
 
-def get_data_incremental(cities_to_query: list, date_end: str):
-    for city in cities_to_query:
-        (city_code, city_name, latitude, longitude) = city
-        query_params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "start_date": date_end,
-            "end_date": date_end,
-            "hourly": config.OPENMETEO_VARIABLES
-        }
-        resp = requests.get(config.OPENMETEO_URL, params=query_params)
-        response_json = resp.json()
-        weather_message = []
-        for index, record in enumerate(response_json["hourly"]["time"]):
+def construct_weather_message(weather_data: dict, city_code: str, city_name: str, latitude: float, longitude: float, date_end: str) -> list[dict]:
+    weather_message = []
+    for index, record in enumerate(weather_data["hourly"]["time"]):
             object = {
                 "city_name": city_name,
                 "city": city_code,
                 "latitude": latitude,
                 "longitude": longitude,
                 "time": record,
-                "temperature": response_json["hourly"]["temperature_2m"][index],
-                "humidity": response_json["hourly"]["relative_humidity_2m"][index],
-                "wind_speed": response_json["hourly"]["wind_speed_10m"][index],
-                "precipitation": response_json["hourly"]["precipitation"][index],
-                "weather_code": response_json["hourly"]["weather_code"][index],
-                "weather": config.WEATHER_CODES[response_json["hourly"]["weather_code"][index]]
+                "temperature": weather_data["hourly"]["temperature_2m"][index],
+                "humidity": weather_data["hourly"]["relative_humidity_2m"][index],
+                "wind_speed": weather_data["hourly"]["wind_speed_10m"][index],
+                "precipitation": weather_data["hourly"]["precipitation"][index],
+                "weather_code": weather_data["hourly"]["weather_code"][index],
+                "weather": config.WEATHER_CODES[weather_data["hourly"]["weather_code"][index]]
             }
             weather_message.append(object)
+    return weather_message
+
+def get_data_incremental(cities_to_query: list, date_end: str):
+    for city in cities_to_query:
+        (city_code, city_name, latitude, longitude) = city
+        weather_data = get_weather_data(latitude, longitude, date_end)
+        weather_message = construct_weather_message(weather_data, city_code, date_end)
         return weather_message
 
 def run(date_start=None, date_end=None):
