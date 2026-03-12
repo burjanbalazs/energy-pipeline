@@ -73,7 +73,7 @@ def get_data_incremental(cities_to_query: list, date_end: str):
     for city in cities_to_query:
         (city_code, city_name, latitude, longitude) = city
         weather_data = get_weather_data(latitude, longitude, date_end)
-        weather_message = construct_weather_message(weather_data, city_code, date_end)
+        weather_message = construct_weather_message(weather_data, city_code, city_name, latitude, longitude, date_end)
         return weather_message
 
 def run(date_start=None, date_end=None):
