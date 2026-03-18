@@ -47,3 +47,4 @@ Thumbs.db
 .idea/
 *.swp
 *.example.json
+result.json

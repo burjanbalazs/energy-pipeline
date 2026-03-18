@@ -47,3 +47,4 @@ OPENMETEO_VARIABLES = (
     "wind_speed_10m,shortwave_radiation,"
     "precipitation,weather_code"
 )
+KAFKA_TOPIC = "raw.weather.hourly"

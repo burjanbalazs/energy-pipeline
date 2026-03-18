@@ -27,6 +27,22 @@ logging.basicConfig(
 )
 log = logging.getLogger("weather_producer")
 
+
+def make_producer() -> Producer:
+    return Producer({
+        "bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092"),
+        "client.id": "weather_producer",
+        "retries": 5,
+        "retry.backoff.ms": 1000,
+        "acks": "all",
+    })
+
+def deliver_callback(err, msg):
+    if err:
+        log.error(f"Message failed delivery: {err}")
+    else:
+        log.info(f"Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
+
 def get_weather_data(latitude: float, longitude: float, date_end: str):
     query_params = {
         "latitude": latitude,
@@ -69,17 +85,19 @@ def construct_weather_message(weather_data: dict, city_code: str, city_name: str
             weather_message.append(object)
     return weather_message
 
-def get_data_incremental(cities_to_query: list, date_end: str):
-    for city in cities_to_query:
-        (city_code, city_name, latitude, longitude) = city
-        weather_data = get_weather_data(latitude, longitude, date_end)
-        weather_message = construct_weather_message(weather_data, city_code, city_name, latitude, longitude, date_end)
-        return weather_message
+def get_data_incremental(city, date_end: str):
+    (city_code, city_name, latitude, longitude) = city
+    weather_data = get_weather_data(latitude, longitude, date_end)
+    weather_message = construct_weather_message(weather_data, city_code, city_name, latitude, longitude, date_end)
+    return weather_message
 
 def run(date_start=None, date_end=None):
+    producer = make_producer()
     cities_to_query = query_city_information(config.CITIES_LIST)
     if date_start == None:
-        get_data_incremental(cities_to_query, date_end)
+        for city in cities_to_query:
+            producer.produce(config.KAFKA_TOPIC,callback=deliver_callback, key=city[1], value=str(get_data_incremental(city, date_end)))
+            producer.flush()
     
 
 # ── Entrypoint ───────────────────────────────────────────────
