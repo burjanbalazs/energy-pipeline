@@ -48,3 +48,5 @@ Thumbs.db
 *.swp
 *.example.json
 result.json
+energy_results.xml
+ingestion/result_backfill.json

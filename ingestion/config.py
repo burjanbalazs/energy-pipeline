@@ -10,6 +10,18 @@ CITIES_LIST = [
     'Bucharest',
     'Lisbon'
 ]
+COUNTRIES_LIST = [
+    'DE',
+    'FR',
+    'IT',
+    'GB',
+    'ES',
+    'PL',
+    'AT',
+    'HU',
+    'RO',
+    'PT'
+]
 WEATHER_CODES = {
     0: "Clear sky",
     1: "Mainly clear",

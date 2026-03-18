@@ -43,11 +43,11 @@ def deliver_callback(err, msg):
     else:
         log.info(f"Message delivered to {msg.topic()} [{msg.partition()}] at offset {msg.offset()}")
 
-def get_weather_data(latitude: float, longitude: float, date_end: str):
+def get_weather_data(latitude: float, longitude: float, date_start: str, date_end: str):
     query_params = {
         "latitude": latitude,
         "longitude": longitude,
-        "start_date": date_end,
+        "start_date": date_start,
         "end_date": date_end,
         "hourly": config.OPENMETEO_VARIABLES
     }
@@ -85,18 +85,19 @@ def construct_weather_message(weather_data: dict, city_code: str, city_name: str
             weather_message.append(object)
     return weather_message
 
-def get_data_incremental(city, date_end: str):
+def get_data_backfill(city, date_start: str, date_end: str):
     (city_code, city_name, latitude, longitude) = city
-    weather_data = get_weather_data(latitude, longitude, date_end)
+    weather_data = get_weather_data(latitude, longitude, date_start, date_end)
     weather_message = construct_weather_message(weather_data, city_code, city_name, latitude, longitude, date_end)
+
     return weather_message
 
 def run(date_start=None, date_end=None):
     producer = make_producer()
     cities_to_query = query_city_information(config.CITIES_LIST)
     for city in cities_to_query:
-        weather_message = get_data_incremental(city, date_end)
-        for message in weather_message:
+        weather_messages = get_data_backfill(city, date_start, date_end)
+        for message in weather_messages:
             producer.produce(config.KAFKA_TOPIC, callback=deliver_callback, key=city[1], value=str(message))
     producer.flush()
 
@@ -104,4 +105,4 @@ def run(date_start=None, date_end=None):
 
 if __name__ == "__main__":
     load_date = date.today() - timedelta(5)
-    run(date_start=load_date, date_end=load_date)
+    run(date_start=load_date-timedelta(days=365), date_end=load_date)
