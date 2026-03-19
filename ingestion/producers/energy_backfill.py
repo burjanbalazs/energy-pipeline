@@ -80,7 +80,7 @@ def get_points_per_hour(resolution_str: str) -> int:
     return 60 // minutes
 
 
-def parse_energy_message(xml_string: str, country_code: str) -> list[dict]:
+def parse_energy_message(xml_string: str, country_code: str, city: str) -> list[dict]:
     """
     Parse ENTSOE-E XML response and extract load (demand) data.
     Aggregates sub-hourly data to hourly averages in a single pass over points.
@@ -130,9 +130,10 @@ def parse_energy_message(xml_string: str, country_code: str) -> list[dict]:
 
                 if count == points_per_hour:
                     messages.append({
-                        "country_code": country_code,
-                        "timestamp": (start_time + timedelta(hours=hour_idx)).isoformat(),
-                        "demand_mw": round(running_sum / count, 2),
+                        "city_name": city,
+                        "country": country_code,
+                        "time": (start_time + timedelta(hours=hour_idx)).isoformat(),
+                        "load_mw": round(running_sum / count, 2),
                     })
                     hour_idx += 1
                     running_sum = 0.0
@@ -187,7 +188,7 @@ def run(date_start: str, date_end: str):
             continue
 
         # Parse XML and extract messages
-        messages = parse_energy_message(xml_response, country_code)
+        messages = parse_energy_message(xml_response, country_code, city_name)
         log.info(f"Parsed {len(messages)} records for {country_code}")
 
         # Publish to Kafka

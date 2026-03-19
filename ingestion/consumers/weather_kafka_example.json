@@ -1,0 +1,13 @@
+{
+    "city_name": "Berlin",
+    "country": "DE",
+    "latitude": 52.52437,
+    "longitude": 13.41053,
+    "time": "2025-03-13T00:00",
+    "temperature": 3.2,
+    "humidity": 92,
+    "wind_speed": 3.7,
+    "precipitation": 0.0,
+    "weather_code": 3,
+    "weather": "Overcast"
+}

@@ -87,7 +87,7 @@ if __name__ == "__main__":
                 i = 0
                 sum = 0
                 hour = 0
-                
+
                 for point in period.findall('ns:Point', ns):
                     quantity = float(point.find('ns:quantity', ns).text)
                     sum += quantity
