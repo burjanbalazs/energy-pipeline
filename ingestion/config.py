@@ -1,26 +1,13 @@
-CITIES_LIST = [
-    'Berlin',
-    'Paris',
-    'Rome',
-    'London',
-    'Madrid',
-    'Warsaw',
-    'Vienna',
-    'Budapest',
-    'Bucharest',
-    'Lisbon'
-]
-COUNTRIES_LIST = [
-    'DE',
-    'FR',
-    'IT',
-    'GB',
-    'ES',
-    'PL',
-    'AT',
-    'HU',
-    'RO',
-    'PT'
+CITIES = [
+    ('Berlin', 'DE'),
+    ('Paris', 'FR'),
+    ('Rome', 'IT'),
+    ('Madrid', 'ES'),
+    ('Warsaw', 'PL'),
+    ('Vienna', 'AT'),
+    ('Budapest', 'HU'),
+    ('Bucharest', 'RO'),
+    ('Lisbon', 'PT')
 ]
 WEATHER_CODES = {
     0: "Clear sky",

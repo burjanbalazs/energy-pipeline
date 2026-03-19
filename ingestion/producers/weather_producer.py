@@ -53,17 +53,24 @@ def get_weather_data(latitude: float, longitude: float, date_end: str):
     }
     return requests.get(config.OPENMETEO_URL, params=query_params).json()
 
-def query_city_information(list_of_cities: None) -> list:
+def query_city_information() -> list:
+    """Query Open-Meteo geo API to get coordinates for each city."""
     cities_information = []
-    for city in config.CITIES_LIST:
+    for city_name, country_code in config.CITIES:
         param = {
-            "name": city,
+            "name": city_name,
             "count": 1
         }
         city_information = requests.get(config.OPENMETEO_GEO_API_URL, params=param)
         city_information.raise_for_status()
         city_json = city_information.json()
-        cities_information.append((city_json["results"][0]["country_code"], city_json["results"][0]["name"], city_json["results"][0]["latitude"], city_json["results"][0]["longitude"]))
+        result = city_json["results"][0]
+        cities_information.append((
+            country_code,
+            result["name"],
+            result["latitude"],
+            result["longitude"]
+        ))
     return cities_information
 
 def construct_weather_message(weather_data: dict, city_code: str, city_name: str, latitude: float, longitude: float, date_end: str) -> list[dict]:
@@ -71,7 +78,7 @@ def construct_weather_message(weather_data: dict, city_code: str, city_name: str
     for index, record in enumerate(weather_data["hourly"]["time"]):
             object = {
                 "city_name": city_name,
-                "city": city_code,
+                "country": city_code,
                 "latitude": latitude,
                 "longitude": longitude,
                 "time": record,
@@ -93,7 +100,7 @@ def get_data_incremental(city, date_end: str):
 
 def run(date_start=None, date_end=None):
     producer = make_producer()
-    cities_to_query = query_city_information(config.CITIES_LIST)
+    cities_to_query = query_city_information()
     for city in cities_to_query:
         weather_message = get_data_incremental(city, date_end)
         for message in weather_message:

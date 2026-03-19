@@ -13,6 +13,7 @@
 # If key not present, logs a warning and exits gracefully.
 from entsoe import EntsoeRawClient
 import os
+import config
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta, date
@@ -31,6 +32,7 @@ logging.basicConfig(
 log = logging.getLogger("energy_producer")
 client = EntsoeRawClient(api_key=os.getenv("ENTSOE_API_KEY"))
 
+
 # ── Kafka ────────────────────────────────────────────────────
 def make_producer() -> Producer:
     return Producer({
@@ -41,10 +43,17 @@ def make_producer() -> Producer:
         "acks":              "all",
     })
 
+def get_aggregation_factor(resolution):
+    if resolution == "PT60M":
+        return 1
+    if resolution == "PT30M":
+        return 2
+    if resolution == "PT15M":
+        return 4
 
 def delivery_callback(err, msg):
     if err:
-        log.error(f"Delivery failed for {msg.key()}: {err}")
+        log.error(f"Message failed delivery: {err}")
     else:
         log.debug(f"Delivered → {msg.topic()} partition={msg.partition()} offset={msg.offset()}")
 
@@ -57,14 +66,47 @@ if __name__ == "__main__":
         )
         raise SystemExit(0)
     
+    producer = make_producer()
     start_date = pd.Timestamp(date.today() - timedelta(5)).tz_localize("UTC")
     end_date = pd.Timestamp(date.today() - timedelta(4)).tz_localize("UTC")
-    # xml_string = client.query_load(country_code="DE",start=start_date,end=end_date)
-    ns = {"ns": "urn:iec62325.351:tc57wg16:451-6:generationloaddocument:3:0"}
-    # tree = ET.fromstring(xml_string)
-    print(start_date + pd.DateOffset(days=1))
-    # for time_series in tree.findall('ns:TimeSeries', ns):
-    #     for period in time_series.findall('ns:Period', ns):
-    #         for point in period.findall('ns:Point', ns):
-    #             print(1)
-    #             print(period.tag)
+
+    for city, country in config.CITIES:
+        xml_string = client.query_load(country_code="DE",start=start_date,end=end_date)
+        ns = {"ns": "urn:iec62325.351:tc57wg16:451-6:generationloaddocument:3:0"}
+        tree = ET.fromstring(xml_string)
+
+        for time_series in tree.findall('ns:TimeSeries', ns):
+            for period in time_series.findall('ns:Period', ns):
+
+                resolution = period.find('ns:resolution', ns).text
+                time_interval = period.find('ns:timeInterval', ns)
+                start_elem = time_interval.find('ns:start', ns)
+                start_time = datetime.fromisoformat(start_elem.text.replace('Z', '+00:00'))
+                
+                count = get_aggregation_factor(resolution)
+                i = 0
+                sum = 0
+                hour = 0
+                
+                for point in period.findall('ns:Point', ns):
+                    quantity = float(point.find('ns:quantity', ns).text)
+                    sum += quantity
+                    i += 1
+                    if i == count:
+                        avg = sum / count
+                        energy_message = {
+                            "city_name": city,
+                            "country": country,
+                            "time": (start_time + timedelta(hours=hour)).isoformat(),
+                            "load_mw": avg,
+                        }
+                        producer.produce(
+                            topic="raw.energy.demand",
+                            value=str(energy_message),
+                            key=country,
+                            callback=delivery_callback
+                        )
+                        i = 0
+                        sum = 0
+                        hour = hour + 1
+    producer.flush()
