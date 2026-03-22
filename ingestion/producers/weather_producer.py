@@ -9,10 +9,8 @@
 #       Run daily via Airflow.
 
 import os
-import time
 import logging
-import argparse
-from datetime import datetime, timezone, timedelta, date
+from datetime import timedelta, date
 import config
 import requests
 from confluent_kafka import Producer
@@ -104,7 +102,7 @@ def run(date_start=None, date_end=None):
     for city in cities_to_query:
         weather_message = get_data_incremental(city, date_end)
         for message in weather_message:
-            producer.produce(config.KAFKA_TOPIC, callback=deliver_callback, key=city[1], value=str(message))
+            producer.produce(config.KAFKA_TOPIC, callback=deliver_callback, key=city[1], value=message.model_dump_json())
     producer.flush()
 
 # ── Entrypoint ───────────────────────────────────────────────

@@ -16,9 +16,8 @@ import os
 import config
 import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timedelta, date
 import pandas as pd
-import requests
 import xml.etree.ElementTree as ET
 from confluent_kafka import Producer
 from dotenv import load_dotenv

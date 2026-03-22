@@ -282,6 +282,20 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  spark-jobs:
+    build:
+      context: ./processing
+      dockerfile: Dockerfile
+    container_name: spark-jobs
+    environment:
+      AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME}
+      AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY}
+    volumes:
+      - ./processing:/app    # mount your code so changes reflect without rebuilding
+    networks:
+      - pipeline_net
+    command: tail -f /dev/null    # keeps container alive so you can exec into it
+
 # ─────────────────────────────────────────
 # NAMED VOLUMES
 # ─────────────────────────────────────────
