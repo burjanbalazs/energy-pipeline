@@ -8,7 +8,6 @@ bronze_path = f"abfss://bronze@{account}.dfs.core.windows.net/weather"
 silver_path = f"abfss://silver@{account}.dfs.core.windows.net/weather"
 
 df = spark.read.json(bronze_path)
-
 df_silver = (
     df
     .dropDuplicates(["city_name", "country", "time"])
@@ -28,7 +27,8 @@ df_silver = (
             "temperature", "humidity", "wind_speed", "precipitation",
             "weather_code", "weather", "year", "month", "day")
 )
+count = df_silver.count()
 
 df_silver.write.mode("overwrite").partitionBy("year", "month", "day").parquet(silver_path)
 
-print(f"Written {df_silver.count()} rows to silver layer.")
+print(f"Written {count} rows to silver layer.")

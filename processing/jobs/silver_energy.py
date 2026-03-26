@@ -21,6 +21,8 @@ df_silver = (
     .select("city_name", "country", "time", "load_mw", "year", "month", "day")
 )
 
+count = df_silver.count()
+
 df_silver.write.mode("overwrite").partitionBy("year", "month", "day").parquet(silver_path)
 
-print(f"Written {df_silver.count()} rows to silver layer.")
+print(f"Written {count} rows to silver layer.")

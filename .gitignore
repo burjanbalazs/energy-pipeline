@@ -50,3 +50,6 @@ Thumbs.db
 result.json
 energy_results.xml
 ingestion/result_backfill.json
+venv/
+.python-version
+profiles.yml
