@@ -1,21 +1,170 @@
-
 version: 2
 
 models:
-  - name: my_first_dbt_model
-    description: "A starter dbt model"
+  - name: stg_weather
+    description: "Hourly weather data for 10 European cities from Open-Meteo, read from Silver layer on ADLS Gen2."
     columns:
-      - name: id
-        description: "The primary key for this table"
+      - name: city_name
+        description: "Name of the city"
         data_tests:
-          - unique
+          - not_null
+      - name: country
+        description: "ISO country code e.g. DE, FR"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["DE", "FR", "ES", "IT", "PL", "NL", "BE", "AT", "CH", "CZ"]
+      - name: time
+        description: "Hourly timestamp in UTC"
+        data_tests:
+          - not_null
+      - name: temperature
+        description: "Temperature in Celsius"
+        data_tests:
+          - not_null
+      - name: humidity
+        description: "Relative humidity percentage"
+      - name: wind_speed
+        description: "Wind speed in km/h"
+      - name: precipitation
+        description: "Precipitation in mm"
+      - name: weather_code
+        description: "WMO weather code"
+
+  - name: stg_energy
+    description: "Hourly energy load data per country from ENTSO-E, read from Silver layer on ADLS Gen2."
+    columns:
+      - name: city_name
+        description: "Name of the city"
+        data_tests:
+          - not_null
+      - name: country
+        description: "ISO country code"
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["DE", "FR", "ES", "IT", "PL", "NL", "BE", "AT", "CH", "CZ"]
+      - name: time
+        description: "Hourly timestamp in UTC"
+        data_tests:
+          - not_null
+      - name: load_mw
+        description: "Actual total electricity load in megawatts"
+        data_tests:
           - not_null
 
-  - name: my_second_dbt_model
-    description: "A starter dbt model"
+  - name: int_weather_energy_joined
+    description: "Weather and energy data joined on country and hour."
     columns:
-      - name: id
-        description: "The primary key for this table"
+      - name: city_name
         data_tests:
-          - unique
+          - not_null
+      - name: country
+        data_tests:
+          - not_null
+      - name: time
+        data_tests:
+          - not_null
+      - name: temperature
+        data_tests:
+          - not_null
+      - name: humidity
+        data_tests:
+          - not_null
+      - name: wind_speed
+        data_tests:
+          - not_null
+      - name: precipitation
+        data_tests:
+          - not_null
+      - name: weather_code
+        data_tests:
+          - not_null
+      - name: load_mw
+        data_tests:
+          - not_null
+
+  - name: mart_daily_demand_summary
+    description: "Daily summary of energy demand with average weather conditions."
+    columns:
+      - name: city_name
+        data_tests:
+          - not_null
+      - name: country
+        data_tests:
+          - not_null
+      - name: activity_date
+        description: "Date (without time) in UTC"
+        data_tests:
+          - not_null
+      - name: avg_temperature
+        description: "Average daily temperature in Celsius"
+        data_tests:
+          - not_null
+      - name: min_temperature
+        description: "Minimum daily temperature in Celsius"
+        data_tests:
+          - not_null
+      - name: max_temperature
+        description: "Maximum daily temperature in Celsius"
+        data_tests:
+          - not_null
+      - name: avg_humidity
+        description: "Average daily relative humidity percentage"
+        data_tests:
+          - not_null
+      - name: min_humidity
+        description: "Minimum daily relative humidity percentage"
+        data_tests:
+          - not_null
+      - name: max_humidity
+        description: "Maximum daily relative humidity percentage"
+        data_tests:
+          - not_null
+      - name: avg_wind_speed
+        description: "Average daily wind speed in km/h"
+        data_tests:
+          - not_null
+      - name: avg_precipitation
+        description: "Average daily precipitation in mm"
+        data_tests:
+          - not_null
+      - name: min_load_mw
+        description: "Minimum daily electricity load in megawatts"
+        data_tests:
+          - not_null
+      - name: max_load_mw
+        description: "Maximum daily electricity load in megawatts"
+        data_tests:
+          - not_null
+      - name: avg_load_mw
+        description: "Average daily electricity load in megawatts"
+        data_tests:
+          - not_null
+      - name: total_load_mw
+        description: "Total daily electricity load in megawatts"
+        data_tests:
+          - not_null
+
+  - name: mart_anomaly_days
+    description: "Days where the average load was an anomaly compared to the mean and standard deviation for that country."
+    columns:
+      - name: country
+        data_tests:
+          - not_null
+      - name: activity_date
+        description: "Date (without time) in UTC"
+        data_tests:
+          - not_null
+      - name: avg_load_mw
+        description: "Average daily electricity load in megawatts"
+        data_tests:
+          - not_null
+      - name: mean_load
+        description: "Mean average daily load for that country in megawatts"
+        data_tests:
+          - not_null
+      - name: stddev_load
+        description: "Standard deviation of average daily load for that country in megawatts"
+        data_tests:
           - not_null

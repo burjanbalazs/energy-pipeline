@@ -92,13 +92,13 @@ tf-output-dev:
 
 # ── dbt ──────────────────────────────────────────────────────
 dbt-run:
-	cd transform && dbt run
+	cd transform/energy_pipeline && set -a && . ../../.env && set +a && dbt run --profiles-dir .. --threads 4
 
 dbt-test:
-	cd transform && dbt test
+	cd transform/energy_pipeline && set -a && . ../.env && set +a && dbt test --profiles-dir ..
 
 dbt-docs:
-	cd transform && dbt docs generate && dbt docs serve
+	cd transform/energy_pipeline && set -a && . ../.env && set +a && dbt docs generate --profiles-dir . && dbt docs serve --profiles-dir ..
 
 # ── Quality ──────────────────────────────────────────────────
 test:

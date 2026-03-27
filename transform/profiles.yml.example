@@ -1,0 +1,11 @@
+energy_pipeline:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ":memory:"
+      extensions:
+        - azure
+      settings:
+        azure_storage_account_name: "{{ env_var('') }}"
+        azure_storage_account_key: "{{ env_var('') }}"
