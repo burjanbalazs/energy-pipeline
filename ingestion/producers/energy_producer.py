@@ -18,6 +18,8 @@ import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, date
 import pandas as pd
+import time
+from requests import HTTPError
 import xml.etree.ElementTree as ET
 from confluent_kafka import Producer
 from dotenv import load_dotenv
@@ -70,6 +72,16 @@ if __name__ == "__main__":
     end_date = pd.Timestamp(date.today() - timedelta(4)).tz_localize("UTC")
 
     for city, country in config.CITIES:
+        for attempt in range(5):
+            try:
+                xml_string = client.query_load(country_code="DE",start=start_date,end=end_date)
+                break
+            except HTTPError as e:
+                if e.response.status_code == 503:
+                    log.warning(f"503 from ENTSO-E, attempt {attempt+1}/{5}, retrying in 60s")
+                    time.sleep(30)
+                else: 
+                    log.error(f"ENTSOE-API failed with error code {e.response.content}")
         xml_string = client.query_load(country_code="DE",start=start_date,end=end_date)
         ns = {"ns": "urn:iec62325.351:tc57wg16:451-6:generationloaddocument:3:0"}
         tree = ET.fromstring(xml_string)

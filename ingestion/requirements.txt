@@ -1,3 +1,5 @@
 requests==2.31.0
 azure-storage-blob==12.19.0
 python-dotenv
+confluent-kafka
+entsoe-py

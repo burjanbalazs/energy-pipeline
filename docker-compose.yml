@@ -27,6 +27,8 @@ x-airflow-common: &airflow-common
     - ./processing:/opt/airflow/processing       # PySpark jobs accessible from Airflow
     - ./transform:/opt/airflow/transform         # dbt project accessible from Airflow
     - airflow_logs:/opt/airflow/logs
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ./.env:/opt/airflow/.env
   depends_on:
     postgres:
       condition: service_healthy
@@ -206,6 +208,13 @@ services:
           --lastname User \
           --role Admin \
           --email admin@pipeline.local
+        airflow variables set azure_storage_account_name "${AZURE_STORAGE_ACCOUNT_NAME}"
+        airflow variables set azure_storage_account_key "${AZURE_STORAGE_ACCOUNT_KEY}"
+        airflow variables set entsoe_api_key "${ENTSOE_API_KEY}"
+        airflow connections add azure_blob_storage \
+          --conn-type wasb \
+          --conn-login "${AZURE_STORAGE_ACCOUNT_NAME}" \
+          --conn-password "${AZURE_STORAGE_ACCOUNT_KEY}"
         echo "Airflow initialized."
     restart: "no"
 
@@ -303,6 +312,23 @@ services:
       - pipeline_net
     command: tail -f /dev/null    # keeps container alive so you can exec into it
 
+  dbt:
+    build:
+      context: ./transform
+      dockerfile: Dockerfile
+    image: energy-pipeline-dbt:latest
+    container_name: dbt
+    environment:
+      AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME}
+      AZURE_STORAGE_ACCOUNT_KEY: ${AZURE_STORAGE_ACCOUNT_KEY}
+    volumes:
+      - ./transform:/app
+      - ./.env:/root/.env
+      - ./transform/energy_pipeline/analytics.duckdb:/app/energy_pipeline/analytics.duckdb
+    networks:
+      - pipeline_net
+    command: tail -f /dev/null
+
 # ─────────────────────────────────────────
   # WEATHER CONSUMER — Kafka → Bronze (Azure)
   # Long-running service, always on
@@ -311,8 +337,9 @@ services:
     build:
       context: ./ingestion
       dockerfile: Dockerfile
+    image: energy-pipeline-ingestion:latest
     container_name: weather-consumer
-    command: python -m ingestion.consumers.weather_consumer
+    command: python -m consumers.weather_consumer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME}
@@ -329,11 +356,9 @@ services:
   # Long-running service, always on
   # ─────────────────────────────────────────
   energy-consumer:
-    build:
-      context: ./ingestion
-      dockerfile: Dockerfile
+    image: energy-pipeline-ingestion:latest   # reuses the same image, no build needed
     container_name: energy-consumer
-    command: python -m ingestion.consumers.energy_consumer
+    command: python -m consumers.energy_consumer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       AZURE_STORAGE_ACCOUNT_NAME: ${AZURE_STORAGE_ACCOUNT_NAME}

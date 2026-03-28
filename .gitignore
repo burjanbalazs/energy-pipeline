@@ -19,7 +19,6 @@ secrets.tfvars
 transform/target/
 transform/dbt_packages/
 transform/logs/
-transform/profiles.yml   # contains warehouse credentials
 
 # ── Python ───────────────────────────────────────────────────
 __pycache__/
@@ -52,4 +51,4 @@ energy_results.xml
 ingestion/result_backfill.json
 venv/
 .python-version
-profiles.yml
+analytics.duckdb

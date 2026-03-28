@@ -1,0 +1,15 @@
+energy_pipeline:
+  target: dev
+  threads: 4
+  outputs:
+    dev:
+      type: duckdb
+      path: "analytics.duckdb"
+      extensions:
+        - azure
+        - httpfs
+      settings:
+        azure_account_name: "{{ env_var('AZURE_STORAGE_ACCOUNT_NAME') }}"
+        azure_storage_connection_string: "DefaultEndpointsProtocol=https;AccountName={{ env_var('AZURE_STORAGE_ACCOUNT_NAME') }};AccountKey={{ env_var('AZURE_STORAGE_ACCOUNT_KEY') }};EndpointSuffix=core.windows.net"
+        ca_cert_file: "/etc/ssl/certs/ca-certificates.crt"
+        azure_transport_option_type: "curl"

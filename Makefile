@@ -3,7 +3,7 @@
 # Usage: make <target>
 # ============================================================
 
-.PHONY: help up down logs ps \
+.PHONY: help up down logs ps build \
         tf-init tf-plan-dev tf-apply-dev tf-plan-prod tf-apply-prod \
         dbt-run dbt-test dbt-docs \
         test lint \
@@ -12,9 +12,16 @@
 # ── Default target ───────────────────────────────────────────
 help:
 	@echo ""
+	@echo "  Setup (first time)"
+	@echo "  ─────────────────────────────────────────────────"
+	@echo "  1. cp .env.example .env  and fill in credentials"
+	@echo "  2. make tf-apply-dev     provision Azure ADLS (bronze/silver containers)"
+	@echo "  3. make up               build images + start all services"
+	@echo ""
 	@echo "  Local dev"
 	@echo "  ─────────────────────────────────────────────────"
-	@echo "  make up              Start all services (docker compose)"
+	@echo "  make build           Build all custom Docker images"
+	@echo "  make up              Build images + start all services"
 	@echo "  make down            Stop all services"
 	@echo "  make logs            Tail logs for all services"
 	@echo "  make ps              Show running containers"
@@ -44,7 +51,10 @@ help:
 	@echo ""
 
 # ── Local dev ────────────────────────────────────────────────
-up:
+build:
+	docker compose build
+
+up: build
 	docker compose up -d
 	@echo "Services started:"
 	@echo "  Airflow:   http://localhost:8080  (admin/admin)"
